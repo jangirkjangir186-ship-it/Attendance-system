@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AttendX — Smart Attendance System</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- QR Scanner library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<!-- QR Code Generator library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ── Background particles ── -->
+<div class="bg-grid"></div>
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+
+<div class="app">
+
+  <!-- ══ TOP NAV ══ -->
+  <nav class="topnav">
+    <div class="nav-brand">
+      <div class="brand-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+      </div>
+      <span class="brand-name">Attend<span>X</span></span>
+    </div>
+    <div class="nav-tabs">
+      <button class="ntab active" onclick="showPage('dashboard')" id="tab-dashboard">📊 Dashboard</button>
+      <button class="ntab" onclick="showPage('qr-scan')"   id="tab-qr-scan">📷 QR Scan</button>
+      <button class="ntab" onclick="showPage('qr-gen')"    id="tab-qr-gen">🔳 QR Generate</button>
+      <button class="ntab" onclick="showPage('face')"      id="tab-face">🤖 Face Mode</button>
+      <button class="ntab" onclick="showPage('students')"  id="tab-students">👥 Students</button>
+      <button class="ntab" onclick="showPage('reports')"   id="tab-reports">📋 Reports</button>
+    </div>
+    <div class="nav-time" id="navTime">--:--:--</div>
+  </nav>
+
+  <!-- ══════════════════════════════════
+       PAGE: DASHBOARD
+  ══════════════════════════════════ -->
+  <div class="page active" id="page-dashboard">
+    <div class="page-header">
+      <h1>Good <span id="timeOfDay">Morning</span>! 👋</h1>
+      <p>Today's attendance overview — <span id="todayDate"></span></p>
+    </div>
+
+    <!-- Stat cards -->
+    <div class="stat-grid">
+      <div class="stat-card s-blue">
+        <div class="stat-icon">👥</div>
+        <div class="stat-num" id="statTotal">0</div>
+        <div class="stat-label">Total Students</div>
+      </div>
+      <div class="stat-card s-green">
+        <div class="stat-icon">✅</div>
+        <div class="stat-num" id="statPresent">0</div>
+        <div class="stat-label">Present Today</div>
+      </div>
+      <div class="stat-card s-red">
+        <div class="stat-icon">❌</div>
+        <div class="stat-num" id="statAbsent">0</div>
+        <div class="stat-label">Absent Today</div>
+      </div>
+      <div class="stat-card s-amber">
+        <div class="stat-icon">📊</div>
+        <div class="stat-num" id="statPct">0%</div>
+        <div class="stat-label">Attendance Rate</div>
+      </div>
+    </div>
+
+    <!-- Attendance ring + recent log -->
+    <div class="dash-grid">
+      <!-- Ring chart -->
+      <div class="card">
+        <div class="card-title">Today's Attendance</div>
+        <div class="ring-wrap">
+          <svg class="ring-svg" viewBox="0 0 120 120">
+            <circle class="ring-bg" cx="60" cy="60" r="50"/>
+            <circle class="ring-fill" id="dashRing" cx="60" cy="60" r="50"
+              stroke-dasharray="314" stroke-dashoffset="314"
+              transform="rotate(-90 60 60)"/>
+          </svg>
+          <div class="ring-center">
+            <div class="ring-pct" id="ringPct">0%</div>
+            <div class="ring-sub">Present</div>
+          </div>
+        </div>
+        <div class="ring-legend">
+          <span class="legend-dot green"></span> Present
+          <span class="legend-dot red" style="margin-left:16px"></span> Absent
+        </div>
+      </div>
+
+      <!-- Recent log -->
+      <div class="card">
+        <div class="card-title">Recent Check-ins</div>
+        <div class="log-list" id="recentLog">
+          <div class="log-empty">No check-ins yet today</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+       PAGE: QR SCAN
+  ══════════════════════════════════ -->
+  <div class="page" id="page-qr-scan">
+    <div class="page-header">
+      <h1>📷 QR Code Scanner</h1>
+      <p>Point camera at student's QR code to mark attendance</p>
+    </div>
+
+    <div class="scan-layout">
+      <!-- Camera view -->
+      <div class="card scanner-card">
+        <div class="scanner-frame" id="scannerFrame">
+          <video id="qrVideo" autoplay playsinline muted></video>
+          <canvas id="qrCanvas" style="display:none"></canvas>
+
+          <!-- Scan overlay -->
+          <div class="scan-overlay" id="scanOverlay">
+            <div class="scan-corners">
+              <div class="corner tl"></div>
+              <div class="corner tr"></div>
+              <div class="corner bl"></div>
+              <div class="corner br"></div>
+            </div>
+            <div class="scan-line" id="scanLine"></div>
+          </div>
+
+          <!-- Camera off state -->
+          <div class="cam-off" id="camOff">
+            <div class="cam-icon">📷</div>
+            <p>Camera not started</p>
+          </div>
+        </div>
+
+        <div class="scanner-controls">
+          <button class="btn btn-primary" id="startScanBtn" onclick="startQRScan()">
+            Start Camera
+          </button>
+          <button class="btn btn-outline" id="stopScanBtn" onclick="stopQRScan()" style="display:none">
+            Stop Camera
+          </button>
+          <button class="btn btn-outline" onclick="toggleTorch()" id="torchBtn" style="display:none">
+            🔦 Torch
+          </button>
+        </div>
+        <div class="scan-status" id="scanStatus">Click "Start Camera" to begin scanning</div>
+      </div>
+
+      <!-- Manual entry + recent scans -->
+      <div style="display:flex;flex-direction:column;gap:1.25rem;">
+        <!-- Manual ID entry -->
+        <div class="card">
+          <div class="card-title">Manual Entry</div>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Enter Student ID manually if QR fails</p>
+          <div class="manual-row">
+            <input type="text" id="manualId" class="form-input" placeholder="e.g. STU001" />
+            <button class="btn btn-primary" onclick="markManual()">Mark</button>
+          </div>
+        </div>
+
+        <!-- Scan result -->
+        <div class="card" id="scanResultCard" style="display:none">
+          <div class="card-title">Scan Result</div>
+          <div class="scan-result" id="scanResult"></div>
+        </div>
+
+        <!-- Today's scans -->
+        <div class="card">
+          <div class="card-title">Today's Scans</div>
+          <div class="log-list" id="todayScans">
+            <div class="log-empty">No scans yet</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+       PAGE: QR GENERATE
+  ══════════════════════════════════ -->
+  <div class="page" id="page-qr-gen">
+    <div class="page-header">
+      <h1>🔳 Generate QR Codes</h1>
+      <p>Create unique QR codes for each student — print & distribute</p>
+    </div>
+
+    <div class="two-col">
+      <!-- Generate single QR -->
+      <div class="card">
+        <div class="card-title">Generate Single QR</div>
+        <div class="form-group">
+          <label class="form-label">Student</label>
+          <select class="form-input" id="qrStudentSel">
+            <option value="">-- Select Student --</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="generateSingleQR()">Generate QR Code</button>
+        <div id="singleQRWrap" style="margin-top:1.25rem;text-align:center;display:none">
+          <div id="singleQRCode"></div>
+          <div id="singleQRName" style="margin-top:10px;font-weight:600;font-size:14px"></div>
+          <div id="singleQRId" style="font-size:12px;color:var(--muted);font-family:var(--font-mono)"></div>
+          <button class="btn btn-outline" style="margin-top:12px" onclick="printQR()">🖨 Print QR</button>
+        </div>
+      </div>
+
+      <!-- Generate all QR codes -->
+      <div class="card">
+        <div class="card-title">All Students QR Grid</div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:1rem">Generate QR for all registered students at once</p>
+        <button class="btn btn-primary" style="width:100%" onclick="generateAllQR()">Generate All QR Codes</button>
+        <div id="allQRGrid" style="margin-top:1.25rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:1rem;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+       PAGE: FACE MODE
+  ══════════════════════════════════ -->
+  <div class="page" id="page-face">
+    <div class="page-header">
+      <h1>🤖 Face Detection Mode</h1>
+      <p>Camera detects face presence — student confirms with their ID</p>
+    </div>
+
+    <div class="scan-layout">
+      <!-- Camera -->
+      <div class="card scanner-card">
+        <div class="scanner-frame" id="faceFrame">
+          <video id="faceVideo" autoplay playsinline muted></video>
+          <canvas id="faceCanvas"></canvas>
+
+          <!-- Face detection boxes drawn on canvas -->
+          <div class="face-overlay" id="faceOverlay">
+            <div class="face-status-pill" id="faceStatusPill">No Face Detected</div>
+          </div>
+
+          <div class="cam-off" id="faceCamOff">
+            <div class="cam-icon">🤖</div>
+            <p>Camera not started</p>
+          </div>
+        </div>
+
+        <div class="scanner-controls">
+          <button class="btn btn-primary" id="startFaceBtn" onclick="startFaceMode()">Start Face Camera</button>
+          <button class="btn btn-outline" id="stopFaceBtn" onclick="stopFaceMode()" style="display:none">Stop Camera</button>
+        </div>
+        <div class="scan-status" id="faceStatus">Click "Start Face Camera" to begin</div>
+      </div>
+
+      <!-- Face confirm panel -->
+      <div style="display:flex;flex-direction:column;gap:1.25rem;">
+        <div class="card">
+          <div class="card-title">Face Detected — Confirm Identity</div>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:1rem">When face is detected, select your name and confirm</p>
+
+          <div class="form-group">
+            <label class="form-label">Your Name</label>
+            <select class="form-input" id="faceStudentSel">
+              <option value="">-- Select your name --</option>
+            </select>
+          </div>
+
+          <button class="btn btn-primary" style="width:100%;margin-top:8px" id="confirmFaceBtn" onclick="confirmFaceAttendance()">
+            ✅ Confirm My Attendance
+          </button>
+
+          <div class="face-detected-box" id="faceDetectedBox" style="display:none">
+            <div class="face-detected-icon">😊</div>
+            <div class="face-detected-text" id="faceDetectedText"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Face Mode Log</div>
+          <div class="log-list" id="faceLog">
+            <div class="log-empty">No face confirmations yet</div>
+          </div>
+        </div>
+
+        <!-- Info card -->
+        <div class="card info-card">
+          <div class="card-title">ℹ️ About Face Mode</div>
+          <ul style="font-size:13px;color:var(--muted);line-height:2.2;padding-left:1rem">
+            <li>Camera detects if a face is present</li>
+            <li>Student selects their name & confirms</li>
+            <li>No facial recognition (privacy-safe)</li>
+            <li>Works in any modern browser</li>
+            <li>Requires camera permission</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+       PAGE: STUDENTS
+  ══════════════════════════════════ -->
+  <div class="page" id="page-students">
+    <div class="page-header">
+      <h1>👥 Student Management</h1>
+      <p>Add, edit, and manage student records</p>
+    </div>
+
+    <div class="two-col">
+      <!-- Add student form -->
+      <div class="card">
+        <div class="card-title">Add New Student</div>
+        <div class="form-group">
+          <label class="form-label">Full Name *</label>
+          <input type="text" class="form-input" id="stuName" placeholder="e.g. Rahul Sharma" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Student ID *</label>
+          <input type="text" class="form-input" id="stuId" placeholder="e.g. STU001" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Class / Section</label>
+          <input type="text" class="form-input" id="stuClass" placeholder="e.g. 12-A, CS-3rd" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Roll Number</label>
+          <input type="text" class="form-input" id="stuRoll" placeholder="e.g. 42" />
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="addStudent()">Add Student</button>
+        <div id="addStudentMsg" style="margin-top:10px;font-size:13px;display:none"></div>
+      </div>
+
+      <!-- Student list -->
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+          <div class="card-title" style="margin-bottom:0">Registered Students</div>
+          <div style="display:flex;gap:8px">
+            <input type="text" class="form-input" id="stuSearch" placeholder="Search..." style="width:140px;padding:6px 10px" oninput="renderStudentList()" />
+            <button class="btn btn-outline btn-sm" onclick="exportCSV()">📥 Export</button>
+          </div>
+        </div>
+        <div class="student-list" id="studentList">
+          <div class="log-empty">No students added yet</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+       PAGE: REPORTS
+  ══════════════════════════════════ -->
+  <div class="page" id="page-reports">
+    <div class="page-header">
+      <h1>📋 Attendance Reports</h1>
+      <p>View and export detailed attendance records</p>
+    </div>
+
+    <div class="card" style="margin-bottom:1.5rem">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div class="form-group" style="margin-bottom:0;flex:1;min-width:150px">
+          <label class="form-label">Filter by Date</label>
+          <input type="date" class="form-input" id="reportDate" onchange="renderReports()" />
+        </div>
+        <div class="form-group" style="margin-bottom:0;flex:1;min-width:150px">
+          <label class="form-label">Filter by Student</label>
+          <select class="form-input" id="reportStu" onchange="renderReports()">
+            <option value="all">All Students</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;align-self:flex-end;padding-bottom:0">
+          <button class="btn btn-primary" onclick="renderReports()">Apply</button>
+          <button class="btn btn-outline" onclick="exportReportCSV()">📥 Export CSV</button>
+          <button class="btn btn-outline btn-danger" onclick="clearAllLogs()">🗑 Clear Logs</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary stats for selected date -->
+    <div class="stat-grid" id="reportStats" style="margin-bottom:1.5rem"></div>
+
+    <!-- Report table -->
+    <div class="card">
+      <div class="card-title">Attendance Log</div>
+      <div class="table-wrap">
+        <table class="att-table" id="reportTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Student ID</th>
+              <th>Name</th>
+              <th>Class</th>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Method</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="reportBody">
+            <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:2rem">No records found</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .app -->
+
+<script src="script.js"></script>
+</body>
+</html>
